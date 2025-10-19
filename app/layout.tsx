@@ -1,11 +1,3 @@
-import type { Metadata } from 'next';
-import './globals.css';
-
-export const metadata: Metadata = {
-  title: 'Mind Map AI Generator',
-  description: 'Create mind maps and generate optimized AI prompts',
-};
-
 export default function RootLayout({
   children,
 }: {
@@ -13,7 +5,23 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <script 
+          async 
+          src="https://www.googletagmanager.com/gtag/js?id=G-LX069HN2R1"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-LX069HN2R1');
+            `,
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }
