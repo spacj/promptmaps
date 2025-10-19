@@ -51,7 +51,7 @@ function SuccessPageContent() {
           
           <div className="bg-slate-700/50 rounded-lg p-4 mt-6">
             <p className="text-sm text-slate-400">
-              You'll see your premium features when you return to the home page.
+              You&apos;ll see your premium features when you return to the home page.
             </p>
           </div>
         </div>
