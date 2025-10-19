@@ -10,6 +10,7 @@ import MindMapCanvas from './components/MindMapCanvas';
 import PromptGenerator from './components/PromptGenerator';
 import PaywallModal from './components/PaywallModal';
 import AuthModal from './components/AuthModal';
+import { CookieConsent, Footer } from './components/CookieConsent';
 
 export default function Home() {
   const [boxes, setBoxes] = useState<MindMapNode[]>([]);
