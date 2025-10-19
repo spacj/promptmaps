@@ -12,17 +12,7 @@ import PaywallModal from './components/PaywallModal';
 import AuthModal from './components/AuthModal';
 
 export default function Home() {
-  const [boxes, setBoxes] = useState<MindMapNode[]>([
-    {
-      id: '1',
-      text: 'Root Idea',
-      x: 400,
-      y: 50,
-      level: 0,
-      parentId: null,
-      style: { bg: 'bg-blue-500', text: 'text-white' },
-    },
-  ]);
+  const [boxes, setBoxes] = useState<MindMapNode[]>([]);
   const [selectedBox, setSelectedBox] = useState<string | null>(null);
   const [credits, setCredits] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
@@ -32,6 +22,35 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [pendingPromptType, setPendingPromptType] = useState<PromptType | null>(null);
+  const [canvasInitialized, setCanvasInitialized] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  // Initialize centered root node after component mounts
+  useEffect(() => {
+    if (!canvasInitialized) {
+      // Calculate center position based on typical canvas size
+      const isMobileView = window.innerWidth < 768;
+      const canvasWidth = isMobileView ? window.innerWidth - 24 : 1200; // approximate
+      const canvasHeight = isMobileView ? 500 : 650;
+      
+      const centerX = (canvasWidth / 2) - (isMobileView ? 65 : 80); // half of node width
+      const centerY = (canvasHeight / 2) - 25; // half of node height
+      
+      setBoxes([
+        {
+          id: '1',
+          text: 'Root Idea',
+          x: centerX,
+          y: centerY,
+          level: 0,
+          parentId: null,
+          style: { bg: 'bg-blue-500', text: 'text-white' },
+        },
+      ]);
+      setSelectedBox('1'); // Auto-select the root node
+      setCanvasInitialized(true);
+    }
+  }, [canvasInitialized]);
 
   // Function to refresh user data from Firestore
   const refreshUserData = async (firebaseUser: User) => {
@@ -211,12 +230,14 @@ export default function Home() {
         isGenerating={isGenerating}
       />
 
-      <MindMapCanvas
-        boxes={boxes}
-        setBoxes={setBoxes}
-        selectedBox={selectedBox}
-        setSelectedBox={setSelectedBox}
-      />
+      {canvasInitialized && (
+        <MindMapCanvas
+          boxes={boxes}
+          setBoxes={setBoxes}
+          selectedBox={selectedBox}
+          setSelectedBox={setSelectedBox}
+        />
+      )}
 
       {generatedPrompt && <PromptGenerator prompt={generatedPrompt} />}
 
