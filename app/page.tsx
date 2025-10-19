@@ -305,7 +305,7 @@ export default function Home() {
                 <div>
                   <h3 className="font-semibold text-lg mb-1">Generate AI Prompt</h3>
                   <p className="text-slate-400 text-sm">
-                    Click "Generate AI Prompt" and choose your use case. Our AI will transform your mind map into an optimized prompt!
+                    Click &quot;Generate AI Prompt&quot; and choose your use case. Our AI will transform your mind map into an optimized prompt!
                   </p>
                 </div>
               </div>
@@ -318,7 +318,7 @@ export default function Home() {
                 <h4 className="font-semibold">AI-Powered Optimization</h4>
               </div>
               <p className="text-slate-300 text-sm">
-                Our AI doesn't just convert your map—it enhances it! Get professionally structured prompts optimized for code, research, creativity, and more.
+                Our AI doesn&apos;t just convert your map—it enhances it! Get professionally structured prompts optimized for code, research, creativity, and more.
               </p>
             </div>
 
@@ -327,11 +327,11 @@ export default function Home() {
               onClick={handleCloseWelcome}
               className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 hover:from-purple-700 hover:via-pink-700 hover:to-blue-700 text-white font-bold py-4 rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
-              Let's Get Started! 🚀
+              Let&apos;s Get Started! 🚀
             </button>
 
             <p className="text-center text-slate-500 text-xs mt-4">
-              This message won't show again
+              This message won&apos;t show again
             </p>
           </div>
         </div>
