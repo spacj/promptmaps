@@ -153,7 +153,7 @@ export async function checkAndResetCredits(uid: string): Promise<{ credits: numb
 }
 
 // Use a credit
-export async function useCredit(uid: string): Promise<boolean> {
+export async function consumeCredit(uid: string): Promise<boolean> {
   try {
     const userData = await getUserData(uid);
     if (!userData) return false;

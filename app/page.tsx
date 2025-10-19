@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { MindMapNode, PromptType } from '@/types';
-import { onAuthStateChange, checkAndResetCredits, useCredit, getUserData } from '@/lib/firebase';
+import { onAuthStateChange, checkAndResetCredits, consumeCredit, getUserData } from '@/lib/firebase';
 import { User } from 'firebase/auth';
 import Header from './components/Header';
 import Toolbar from './components/Toolbar';
@@ -121,7 +121,7 @@ export default function Home() {
 
     try {
       // Use a credit (returns false if no credits available)
-      const creditUsed = await useCredit(user.uid);
+      const creditUsed = await consumeCredit(user.uid);
       
       if (!creditUsed && !isPremium) {
         setShowPaywall(true);
