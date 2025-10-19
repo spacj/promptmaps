@@ -32,55 +32,87 @@ function SuccessPageContent() {
 
         console.log('🔍 Verifying payment for session:', sessionId);
 
-        // Call the verify payment endpoint
-        const response = await fetch('/api/verify-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId,
-            userId: user.uid,
-          }),
-        });
+        // Retry logic: Try up to 3 times with delays
+        let attempts = 0;
+        const maxAttempts = 3;
+        let lastError = null;
 
-        const data = await response.json();
-        console.log('📊 Verification response:', data);
+        while (attempts < maxAttempts) {
+          attempts++;
+          console.log(`📡 Verification attempt ${attempts}/${maxAttempts}...`);
 
-        // FIX: Check response.ok first, not just data.success
-        if (response.ok && data.success) {
-          setStatus('success');
-          setMessage('Payment successful! You are now a premium member.');
-          
-          // CRITICAL: Wait for Firebase to propagate the update
-          // Try to fetch updated user data to confirm
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Verify the user is actually premium now
-          const userData = await getUserData(user.uid);
-          console.log('📊 User data after payment:', userData);
-          
-          if (userData?.isPremium) {
-            console.log('✅ Premium status confirmed in Firestore');
-          } else {
-            console.warn('⚠️ Premium status not yet reflected in Firestore');
+          try {
+            const response = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId,
+                userId: user.uid,
+              }),
+            });
+
+            const data = await response.json();
+            console.log('📊 Verification response:', data);
+
+            // Success!
+            if (response.ok && data.success) {
+              console.log('✅ Payment verified successfully!');
+              setStatus('success');
+              setMessage('Payment successful! You are now a premium member. 🎉');
+              
+              // Wait a moment then redirect
+              setTimeout(() => {
+                router.push('/');
+                router.refresh();
+              }, 2000);
+              return; // Exit the function, verification succeeded
+            }
+
+            // If we got a response but it wasn't successful
+            if (!response.ok) {
+              lastError = data.error || data.message || `Server returned ${response.status}`;
+              console.warn(`⚠️ Attempt ${attempts} failed:`, lastError);
+              
+              // Don't retry on certain errors
+              if (response.status === 404 || response.status === 401) {
+                throw new Error(lastError);
+              }
+              
+              // Wait before retrying (exponential backoff)
+              if (attempts < maxAttempts) {
+                const delay = 2000 * attempts; // 2s, 4s, 6s
+                console.log(`⏳ Waiting ${delay}ms before retry...`);
+                setMessage(`Verifying payment... (attempt ${attempts}/${maxAttempts})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+              }
+            }
+          } catch (fetchError: any) {
+            lastError = fetchError.message;
+            console.error(`❌ Fetch error on attempt ${attempts}:`, fetchError);
+            
+            // Wait before retrying network errors
+            if (attempts < maxAttempts) {
+              const delay = 2000 * attempts;
+              console.log(`⏳ Waiting ${delay}ms before retry...`);
+              setMessage(`Connection error, retrying... (${attempts}/${maxAttempts})`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
           }
-         
-          // Redirect to home with a flag to trigger refresh
-          setTimeout(() => {
-            router.push('/?from_success=true');
-            router.refresh(); // Force refresh to get new user data
-          }, 2000);
-        } else {
-          // Payment verification failed
-          setStatus('error');
-          setMessage(data.error || data.message || 'Payment verification failed');
-          console.error('❌ Verification failed:', data);
-          setTimeout(() => router.push('/'), 5000);
         }
-      } catch (error: any) {
-        console.error('❌ Error verifying payment:', error);
+
+        // All attempts failed
+        console.error('❌ All verification attempts failed');
         setStatus('error');
-        setMessage('An error occurred. Please contact support.');
-        setTimeout(() => router.push('/'), 3000);
+        setMessage(lastError || 'Payment verification failed after multiple attempts');
+        
+        // Still redirect, user can contact support
+        setTimeout(() => router.push('/'), 5000);
+
+      } catch (error: any) {
+        console.error('❌ Critical error verifying payment:', error);
+        setStatus('error');
+        setMessage(error.message || 'An error occurred. Please contact support if you were charged.');
+        setTimeout(() => router.push('/'), 5000);
       }
     };
 
@@ -95,6 +127,7 @@ function SuccessPageContent() {
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
             <h1 className="text-2xl font-bold mb-2">Verifying Payment</h1>
             <p className="text-slate-400">{message}</p>
+            <p className="text-xs text-slate-500 mt-4">This usually takes a few seconds...</p>
           </>
         )}
         {status === 'success' && (
@@ -109,7 +142,10 @@ function SuccessPageContent() {
           <>
             <div className="text-red-500 text-6xl mb-4">✗</div>
             <h1 className="text-2xl font-bold mb-2 text-red-500">Error</h1>
-            <p className="text-slate-400">{message}</p>
+            <p className="text-slate-400 mb-4">{message}</p>
+            <p className="text-xs text-slate-500">
+              If you were charged, please contact support with your payment details.
+            </p>
             <p className="text-sm text-slate-500 mt-4">Redirecting to home...</p>
           </>
         )}
