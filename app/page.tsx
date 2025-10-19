@@ -254,85 +254,101 @@ export default function Home() {
 
       {showWelcome && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 max-w-2xl w-full border-2 border-purple-500/30 shadow-2xl shadow-purple-500/20 relative overflow-hidden">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-6 md:p-8 max-w-2xl w-full border-2 border-purple-500/30 shadow-2xl shadow-purple-500/20 relative overflow-hidden max-h-[85vh] md:max-h-[80vh] flex flex-col">
             {/* Decorative elements */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -z-10" />
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -z-10" />
             
-            {/* Header */}
-            <div className="text-center mb-6">
-              <div className="inline-block mb-4">
-                <div className="text-6xl animate-bounce">🧠</div>
-              </div>
-              <h2 className="text-3xl md:text-4xl font-bold mb-3 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                Welcome to AI Mind Map Prompts!
-              </h2>
-              <p className="text-slate-300 text-lg">
-                Transform your ideas into powerful AI prompts
-              </p>
-            </div>
-
-            {/* Steps */}
-            <div className="space-y-4 mb-8">
-              <div className="flex items-start gap-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center font-bold text-lg">
-                  1
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">Create Your Mind Map</h3>
-                  <p className="text-slate-400 text-sm">
-                    Start with the root idea, then add sibling and child nodes to organize your thoughts visually
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-lg">
-                  2
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">Organize & Style</h3>
-                  <p className="text-slate-400 text-sm">
-                    Drag nodes to arrange them, customize colors, and structure your ideas hierarchically
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4 bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full flex items-center justify-center font-bold text-lg">
-                  3
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">Generate AI Prompt</h3>
-                  <p className="text-slate-400 text-sm">
-                    Click &quot;Generate AI Prompt&quot; and choose your use case. Our AI will transform your mind map into an optimized prompt!
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Features highlight */}
-            <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-xl p-4 mb-6 border border-purple-500/20">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-2xl">✨</span>
-                <h4 className="font-semibold">AI-Powered Optimization</h4>
-              </div>
-              <p className="text-slate-300 text-sm">
-                Our AI doesn&apos;t just convert your map—it enhances it! Get professionally structured prompts optimized for code, research, creativity, and more.
-              </p>
-            </div>
-
-            {/* CTA Button */}
+            {/* Close button - mobile friendly */}
             <button
               onClick={handleCloseWelcome}
-              className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 hover:from-purple-700 hover:via-pink-700 hover:to-blue-700 text-white font-bold py-4 rounded-xl transition-all transform hover:scale-105 shadow-lg hover:shadow-xl"
+              className="absolute top-4 right-4 w-10 h-10 bg-slate-700/80 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors z-10"
+              aria-label="Close"
             >
-              Let&apos;s Get Started! 🚀
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
 
-            <p className="text-center text-slate-500 text-xs mt-4">
-              This message won&apos;t show again
-            </p>
+            {/* Scrollable content */}
+            <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+              {/* Header */}
+              <div className="text-center mb-6">
+                <div className="inline-block mb-4">
+                  <div className="text-5xl md:text-6xl animate-bounce">🧠</div>
+                </div>
+                <h2 className="text-2xl md:text-4xl font-bold mb-3 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                  Welcome to AI Mind Map Prompts!
+                </h2>
+                <p className="text-slate-300 text-base md:text-lg">
+                  Transform your ideas into powerful AI prompts
+                </p>
+              </div>
+
+              {/* Steps */}
+              <div className="space-y-3 md:space-y-4 mb-6 md:mb-8">
+                <div className="flex items-start gap-3 md:gap-4 bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700/50">
+                  <div className="flex-shrink-0 w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center font-bold text-base md:text-lg">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base md:text-lg mb-1">Create Your Mind Map</h3>
+                    <p className="text-slate-400 text-xs md:text-sm">
+                      Start with the root idea, then add sibling and child nodes to organize your thoughts visually
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 md:gap-4 bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700/50">
+                  <div className="flex-shrink-0 w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-base md:text-lg">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base md:text-lg mb-1">Organize & Style</h3>
+                    <p className="text-slate-400 text-xs md:text-sm">
+                      Drag nodes to arrange them, customize colors, and structure your ideas hierarchically
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 md:gap-4 bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700/50">
+                  <div className="flex-shrink-0 w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full flex items-center justify-center font-bold text-base md:text-lg">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base md:text-lg mb-1">Generate AI Prompt</h3>
+                    <p className="text-slate-400 text-xs md:text-sm">
+                      Click &quot;Generate AI Prompt&quot; and choose your use case. Our AI will transform your mind map into an optimized prompt!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Features highlight */}
+              <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-xl p-3 md:p-4 mb-6 border border-purple-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl md:text-2xl">✨</span>
+                  <h4 className="font-semibold text-sm md:text-base">AI-Powered Optimization</h4>
+                </div>
+                <p className="text-slate-300 text-xs md:text-sm">
+                  Our AI doesn&apos;t just convert your map—it enhances it! Get professionally structured prompts optimized for code, research, creativity, and more.
+                </p>
+              </div>
+            </div>
+
+            {/* CTA Button - sticky at bottom */}
+            <div className="pt-4 border-t border-slate-700/50 mt-2">
+              <button
+                onClick={handleCloseWelcome}
+                className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 hover:from-purple-700 hover:via-pink-700 hover:to-blue-700 text-white font-bold py-3 md:py-4 rounded-xl transition-all transform active:scale-95 md:hover:scale-105 shadow-lg hover:shadow-xl text-sm md:text-base"
+              >
+                Let&apos;s Get Started! 🚀
+              </button>
+
+              <p className="text-center text-slate-500 text-xs mt-3 md:mt-4">
+                This message won&apos;t show again
+              </p>
+            </div>
           </div>
         </div>
       )}
