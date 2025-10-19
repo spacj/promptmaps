@@ -358,33 +358,35 @@ export default function MindMapCanvas({
         onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
       >
-        {/* Zoom controls */}
-        <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-          <button
-            onClick={zoomIn}
-            className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
-            title="Zoom in"
-          >
-            <ZoomIn size={20} />
-          </button>
-          <button
-            onClick={zoomOut}
-            className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
-            title="Zoom out"
-          >
-            <ZoomOut size={20} />
-          </button>
-          <button
-            onClick={resetView}
-            className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
-            title="Reset view"
-          >
-            <Maximize2 size={20} />
-          </button>
-          <div className="bg-slate-800/90 px-2 py-1 rounded-lg border border-slate-600 text-xs text-center backdrop-blur-sm">
-            {Math.round(scale * 100)}%
+        {/* Zoom controls - Desktop only */}
+        {!isMobile && (
+          <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+            <button
+              onClick={zoomIn}
+              className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
+              title="Zoom in"
+            >
+              <ZoomIn size={20} />
+            </button>
+            <button
+              onClick={zoomOut}
+              className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
+              title="Zoom out"
+            >
+              <ZoomOut size={20} />
+            </button>
+            <button
+              onClick={resetView}
+              className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
+              title="Reset view"
+            >
+              <Maximize2 size={20} />
+            </button>
+            <div className="bg-slate-800/90 px-2 py-1 rounded-lg border border-slate-600 text-xs text-center backdrop-blur-sm">
+              {Math.round(scale * 100)}%
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Grid pattern background */}
         <div 
