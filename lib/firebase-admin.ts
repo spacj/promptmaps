@@ -1,5 +1,7 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 let app: App;
 let adminDb: Firestore;
@@ -83,7 +85,9 @@ function initializeFirebaseAdmin() {
         console.log('📄 Development mode: attempting to load serviceAccountKey.json...');
         
         try {
-          const serviceAccount = require('../serviceAccountKey.json');
+          const serviceAccountPath = join(process.cwd(), 'serviceAccountKey.json');
+          const serviceAccountContent = readFileSync(serviceAccountPath, 'utf8');
+          const serviceAccount = JSON.parse(serviceAccountContent);
           
           // Clean the private key
           if (serviceAccount.private_key) {
