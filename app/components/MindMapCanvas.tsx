@@ -30,21 +30,40 @@ function MindMapNodeComponent({
   isMobile,
   scale,
 }: MindMapNodeProps) {
-  const [isFocused, setIsFocused] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Auto-focus new nodes (those with placeholder text)
-    if (isSelected && !isFocused && (box.text === 'Sibling' || box.text === 'Child' || box.text === 'Root Idea')) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+    // Auto-focus and edit new nodes (those with placeholder text)
+    if (isSelected && !isEditing && (box.text === 'Sibling' || box.text === 'Child' || box.text === 'Root Idea')) {
+      setIsEditing(true);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 0);
     }
-  }, [isSelected, box.text, isFocused]);
+  }, [isSelected, box.text, isEditing]);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSelected && !isEditing) {
+      // Second click - enable editing
+      setIsEditing(true);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 0);
+    }
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+  };
 
   return (
     <div
       className={`absolute cursor-move ${box.style.bg} ${box.style.text} rounded-xl shadow-xl transition-all duration-200 ${
-        isSelected && !isFocused ? 'ring-4 ring-yellow-400 z-10' : isSelected ? 'ring-4 ring-yellow-400 z-10' : 'hover:shadow-2xl'
+        isSelected ? 'ring-4 ring-yellow-400 z-10' : 'hover:shadow-2xl'
       }`}
       style={{ 
         left: box.x, 
@@ -56,6 +75,7 @@ function MindMapNodeComponent({
       }}
       onMouseDown={(e) => onMouseDown(e, box)}
       onTouchStart={(e) => onTouchStart(e, box)}
+      onClick={handleClick}
     >
       <input
         ref={inputRef}
@@ -63,16 +83,19 @@ function MindMapNodeComponent({
         value={box.text}
         onChange={(e) => onTextChange(e.target.value)}
         onFocus={(e) => {
-          setIsFocused(true);
           e.target.select();
         }}
-        onBlur={() => setIsFocused(false)}
+        onBlur={handleBlur}
         className="w-full bg-transparent border-none outline-none text-sm font-semibold placeholder-white/50"
         placeholder="Enter text..."
-        onClick={(e) => e.stopPropagation()}
-        style={{ fontSize: isMobile ? '13px' : '14px' }}
+        readOnly={!isEditing}
+        style={{ 
+          fontSize: isMobile ? '13px' : '14px',
+          cursor: isEditing ? 'text' : 'inherit',
+          pointerEvents: isEditing ? 'auto' : 'none'
+        }}
       />
-      {isSelected && (
+      {isSelected && !isEditing && (
         <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-pulse" />
       )}
     </div>
