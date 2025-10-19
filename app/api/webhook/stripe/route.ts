@@ -3,12 +3,11 @@ import { getStripe } from '@/lib/stripe';
 import { updatePremiumStatusAdmin } from '@/lib/firebase-admin';
 import Stripe from 'stripe';
 
+const stripe = getStripe();
+
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 export async function POST(request: NextRequest) {
-  // Get Stripe instance (lazy initialization)
-  const stripe = getStripe();
-  
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
 
@@ -25,9 +24,8 @@ export async function POST(request: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     console.log(`📨 Received webhook event: ${event.type}`);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('❌ Webhook signature verification failed:', errorMessage);
+  } catch (error: any) {
+    console.error('❌ Webhook signature verification failed:', error.message);
     return NextResponse.json(
       { error: 'Webhook signature verification failed' },
       { status: 400 }
@@ -137,14 +135,17 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ received: true, type: event.type });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error handling webhook:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Webhook handler failed: ' + errorMessage },
+      { error: 'Webhook handler failed: ' + error.message },
       { status: 500 }
     );
   }
 }
 
+// CRITICAL: This tells Next.js to treat the request body as raw
 export const dynamic = 'force-dynamic';
+
+// This is the key configuration for Next.js 13+ App Router
+export const runtime = 'nodejs';
