@@ -1,7 +1,5 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import * as fs from 'fs';
-import * as path from 'path';
 
 let app: App;
 let adminDb: Firestore;
@@ -12,52 +10,63 @@ function initializeFirebaseAdmin() {
     console.log('🔧 Initializing Firebase Admin...');
     
     try {
-      // Try using service account JSON file
-      const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json');
-      
-      if (fs.existsSync(serviceAccountPath)) {
-        console.log('📄 Found serviceAccountKey.json, loading...');
-        
-        // Read and parse the JSON file
-        const serviceAccountContent = fs.readFileSync(serviceAccountPath, 'utf8');
-        const serviceAccount = JSON.parse(serviceAccountContent);
-        
-        // Clean the private key - replace literal \n with actual newlines
-        if (serviceAccount.private_key) {
-          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-        }
+      // Priority 1: Check for base64 encoded service account (easiest for Vercel)
+      if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+        console.log('📦 Using base64 encoded service account JSON');
+        const serviceAccountJson = Buffer.from(
+          process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+          'base64'
+        ).toString('utf8');
+        const serviceAccount = JSON.parse(serviceAccountJson);
         
         app = initializeApp({
           credential: cert(serviceAccount),
         });
         
-        console.log('✅ Firebase Admin initialized with JSON file');
+        console.log('✅ Firebase Admin initialized with base64 service account');
         console.log('📧 Using service account:', serviceAccount.client_email);
-      } else {
-        // Fall back to environment variables
-        console.log('📝 JSON file not found, using environment variables...');
+      }
+      // Priority 2: Check for individual environment variables
+      else if (
+        process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+        process.env.FIREBASE_ADMIN_CLIENT_EMAIL &&
+        (process.env.FIREBASE_ADMIN_PRIVATE_KEY || process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64)
+      ) {
+        console.log('📝 Using individual environment variables...');
         
         const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
         const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-        let privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+        let privateKey: string;
 
-        if (!projectId || !clientEmail || !privateKey) {
-          throw new Error('Missing Firebase Admin credentials. Please create serviceAccountKey.json or set environment variables.');
+        // Try base64 encoded key first
+        if (process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64) {
+          console.log('🔐 Using base64 encoded private key');
+          privateKey = Buffer.from(
+            process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64,
+            'base64'
+          ).toString('utf8');
+        } 
+        // Fallback to regular private key
+        else if (process.env.FIREBASE_ADMIN_PRIVATE_KEY) {
+          console.log('🔑 Using plain private key');
+          privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+          
+          // Clean up the private key - remove quotes if present
+          if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+            privateKey = privateKey.slice(1, -1);
+          }
+          if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
+            privateKey = privateKey.slice(1, -1);
+          }
+          
+          // Replace literal \n with actual newlines
+          privateKey = privateKey.replace(/\\n/g, '\n');
+        } else {
+          throw new Error('FIREBASE_ADMIN_PRIVATE_KEY or FIREBASE_ADMIN_PRIVATE_KEY_BASE64 is required');
         }
 
-        // Clean up the private key
-        // Remove surrounding quotes if present
-        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-          privateKey = privateKey.slice(1, -1);
-        }
-        if (privateKey.startsWith("'") && privateKey.endsWith("'")) {
-          privateKey = privateKey.slice(1, -1);
-        }
-        
-        // Replace literal \n with actual newlines
-        privateKey = privateKey.replace(/\\n/g, '\n');
-
-        console.log('🔑 Private key cleaned, length:', privateKey.length);
+        console.log('🔑 Private key length:', privateKey.length);
+        console.log('📧 Using service account:', clientEmail);
 
         app = initializeApp({
           credential: cert({
@@ -68,21 +77,70 @@ function initializeFirebaseAdmin() {
         });
         
         console.log('✅ Firebase Admin initialized with environment variables');
-        console.log('📧 Using service account:', clientEmail);
+      }
+      // Priority 3: Try loading from file (development only)
+      else if (process.env.NODE_ENV === 'development') {
+        console.log('📄 Development mode: attempting to load serviceAccountKey.json...');
+        
+        try {
+          const serviceAccount = require('../serviceAccountKey.json');
+          
+          // Clean the private key
+          if (serviceAccount.private_key) {
+            serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+          }
+          
+          app = initializeApp({
+            credential: cert(serviceAccount),
+          });
+          
+          console.log('✅ Firebase Admin initialized with JSON file');
+          console.log('📧 Using service account:', serviceAccount.client_email);
+        } catch (fileError) {
+          console.error('❌ Could not load serviceAccountKey.json:', fileError);
+          throw new Error(
+            'Development: serviceAccountKey.json not found and no environment variables set. ' +
+            'Please create serviceAccountKey.json or set FIREBASE_ADMIN environment variables.'
+          );
+        }
+      }
+      // No credentials found
+      else {
+        const errorMsg = 
+          '❌ Missing Firebase Admin credentials!\n' +
+          'Please set one of the following:\n' +
+          '1. FIREBASE_SERVICE_ACCOUNT_BASE64 (recommended for Vercel)\n' +
+          '2. FIREBASE_ADMIN_PRIVATE_KEY + FIREBASE_ADMIN_CLIENT_EMAIL + NEXT_PUBLIC_FIREBASE_PROJECT_ID\n' +
+          '3. Create serviceAccountKey.json (development only)';
+        
+        console.error(errorMsg);
+        throw new Error('Missing Firebase Admin credentials');
       }
     } catch (error: any) {
       console.error('❌ Failed to initialize Firebase Admin:', error);
       console.error('Error details:', error.message);
+      
+      // Log which environment variables are present (for debugging)
+      console.log('Environment check:', {
+        hasServiceAccountBase64: !!process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+        hasProjectId: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        hasClientEmail: !!process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+        hasPrivateKey: !!process.env.FIREBASE_ADMIN_PRIVATE_KEY,
+        hasPrivateKeyBase64: !!process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64,
+        nodeEnv: process.env.NODE_ENV,
+        isVercel: !!process.env.VERCEL,
+      });
+      
       throw error;
     }
   } else {
     app = getApps()[0];
+    console.log('✅ Firebase Admin already initialized');
   }
   
   adminDb = getFirestore(app);
+  console.log('🔌 Firestore connection ready');
   
-  // Test the connection
-  console.log('🔌 Testing Firestore connection...');
   return adminDb;
 }
 
@@ -98,7 +156,6 @@ export async function updatePremiumStatusAdmin(uid: string, isPremium: boolean) 
       throw new Error('Admin DB not initialized');
     }
    
-    // First check if document exists
     const userRef = adminDb.collection('users').doc(uid);
     
     let userDoc;
@@ -117,8 +174,6 @@ export async function updatePremiumStatusAdmin(uid: string, isPremium: boolean) 
     const currentData = userDoc.data();
     console.log(`📄 Current user data:`, currentData);
    
-    // Perform the update - use update() instead of set() with merge
-    // This is more explicit and safer
     const updateData = {
       isPremium: isPremium,
       updatedAt: new Date().toISOString(),
@@ -134,7 +189,6 @@ export async function updatePremiumStatusAdmin(uid: string, isPremium: boolean) 
       throw new Error(`Failed to update user: ${error.message}`);
     }
    
-    // Verify the update with a small delay
     await new Promise(resolve => setTimeout(resolve, 200));
     
     let updatedDoc;
@@ -148,7 +202,6 @@ export async function updatePremiumStatusAdmin(uid: string, isPremium: boolean) 
     const updatedData = updatedDoc.data();
     console.log(`📄 Updated user data:`, updatedData);
    
-    // Confirm the field was actually updated
     if (updatedData?.isPremium !== isPremium) {
       console.error(`❌ Update didn't persist! Expected isPremium: ${isPremium}, got: ${updatedData?.isPremium}`);
       throw new Error(`Update didn't persist. Expected: ${isPremium}, Got: ${updatedData?.isPremium}`);
@@ -167,7 +220,6 @@ export async function updatePremiumStatusAdmin(uid: string, isPremium: boolean) 
   }
 }
 
-// Add a test function to verify admin access
 export async function testAdminAccess() {
   try {
     const testRef = adminDb.collection('_admin_test').doc('test');
