@@ -34,20 +34,33 @@ function MindMapNodeComponent({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Auto-focus and edit new nodes (those with placeholder text)
-    if (isSelected && !isEditing && (box.text === 'Sibling' || box.text === 'Child' || box.text === 'Root Idea')) {
+    // Auto-focus and edit new nodes (those with placeholder text) - but only on desktop
+    if (isSelected && !isEditing && !isMobile && (box.text === 'Sibling' || box.text === 'Child' || box.text === 'Root Idea')) {
       setIsEditing(true);
       setTimeout(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
       }, 0);
     }
-  }, [isSelected, box.text, isEditing]);
+  }, [isSelected, box.text, isEditing, isMobile]);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // On mobile, require double-tap to edit; on desktop, second click enables editing
+    if (isSelected && !isEditing && !isMobile) {
+      // Desktop: Second click - enable editing
+      setIsEditing(true);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 0);
+    }
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    // Double-click/tap to edit
     if (isSelected && !isEditing) {
-      // Second click - enable editing
       setIsEditing(true);
       setTimeout(() => {
         inputRef.current?.focus();
@@ -76,6 +89,7 @@ function MindMapNodeComponent({
       onMouseDown={(e) => onMouseDown(e, box)}
       onTouchStart={(e) => onTouchStart(e, box)}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
     >
       <input
         ref={inputRef}
