@@ -1,8 +1,20 @@
 import { Mistral } from '@mistralai/mistralai';
 
-const client = new Mistral({
-  apiKey: process.env.MISTRAL_API_KEY || '',
-});
+interface ContentChunk {
+  text?: string;
+  [key: string]: unknown;
+}
+
+// Lazy initialization - only create client when needed
+function getClient() {
+  const apiKey = process.env.MISTRAL_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('MISTRAL_API_KEY is not configured');
+  }
+  
+  return new Mistral({ apiKey });
+}
 
 export async function generateOptimizedPrompt(
   mindmapText: string,
@@ -50,6 +62,8 @@ Make it clear and approachable, like a lesson plan.`,
   const systemPrompt = systemPrompts[promptType] || systemPrompts.general;
 
   try {
+    const client = getClient(); // Create client only when function is called
+    
     const response = await client.chat.complete({
       model: 'mistral-large-latest',
       messages: [
@@ -76,7 +90,7 @@ Make it clear and approachable, like a lesson plan.`,
     // If content is an array of chunks, extract text
     if (Array.isArray(content)) {
       return content
-        .map((chunk: any) => chunk.text || '')
+        .map((chunk: ContentChunk) => chunk.text || '')
         .join('')
         .trim() || formatFallbackPrompt(mindmapText, promptType);
     }
@@ -103,5 +117,3 @@ function formatFallbackPrompt(mindmapText: string, promptType: string): string {
   const intro = typeIntros[promptType] || typeIntros.general;
   return intro + mindmapText + '\n\nPlease provide a comprehensive response that addresses all these points.';
 }
-
-export { client };
