@@ -35,16 +35,16 @@ function MindMapNodeComponent({
 
   useEffect(() => {
     // Auto-focus new nodes (those with placeholder text)
-    if (isSelected && (box.text === 'Sibling' || box.text === 'Child' || box.text === 'Root Idea')) {
+    if (isSelected && !isFocused && (box.text === 'Sibling' || box.text === 'Child' || box.text === 'Root Idea')) {
       inputRef.current?.focus();
       inputRef.current?.select();
     }
-  }, [isSelected, box.text]);
+  }, [isSelected, box.text, isFocused]);
 
   return (
     <div
       className={`absolute cursor-move ${box.style.bg} ${box.style.text} rounded-xl shadow-xl transition-all duration-200 ${
-        isSelected ? 'ring-4 ring-yellow-400 scale-105 z-10' : 'hover:scale-102 hover:shadow-2xl'
+        isSelected && !isFocused ? 'ring-4 ring-yellow-400 z-10' : isSelected ? 'ring-4 ring-yellow-400 z-10' : 'hover:shadow-2xl'
       }`}
       style={{ 
         left: box.x, 
