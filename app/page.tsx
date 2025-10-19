@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { MindMapNode, PromptType } from '@/types';
-import { onAuthStateChange, checkAndResetCredits, consumeCredit, getUserData } from '@/lib/firebase';
+import { onAuthStateChange, checkAndResetCredits, consumeCredit } from '@/lib/firebase';
 import { User } from 'firebase/auth';
 import Header from './components/Header';
 import Toolbar from './components/Toolbar';
@@ -10,7 +10,8 @@ import MindMapCanvas from './components/MindMapCanvas';
 import PromptGenerator from './components/PromptGenerator';
 import PaywallModal from './components/PaywallModal';
 import AuthModal from './components/AuthModal';
-import { CookieConsent, Footer } from './components/CookieConsent';
+import CookieConsent from './components/CookieConsent';
+import Footer from './components/Footer';
 
 export default function Home() {
   const [boxes, setBoxes] = useState<MindMapNode[]>([]);
@@ -31,11 +32,11 @@ export default function Home() {
     if (!canvasInitialized) {
       // Calculate center position based on typical canvas size
       const isMobileView = window.innerWidth < 768;
-      const canvasWidth = isMobileView ? window.innerWidth - 24 : 1200; // approximate
+      const canvasWidth = isMobileView ? window.innerWidth - 24 : 1200;
       const canvasHeight = isMobileView ? 500 : 650;
       
-      const centerX = (canvasWidth / 2) - (isMobileView ? 65 : 80); // half of node width
-      const centerY = (canvasHeight / 2) - 25; // half of node height
+      const centerX = (canvasWidth / 2) - (isMobileView ? 65 : 80);
+      const centerY = (canvasHeight / 2) - 25;
       
       setBoxes([
         {
@@ -48,10 +49,10 @@ export default function Home() {
           style: { bg: 'bg-blue-500', text: 'text-white' },
         },
       ]);
-      setSelectedBox('1'); // Auto-select the root node
+      setSelectedBox('1');
       setCanvasInitialized(true);
       
-      // Check if user has seen the welcome screen (after canvas is ready)
+      // Check if user has seen the welcome screen
       const hasSeenWelcome = localStorage.getItem('hasSeenWelcome');
       if (!hasSeenWelcome) {
         setShowWelcome(true);
@@ -59,31 +60,25 @@ export default function Home() {
     }
   }, [canvasInitialized]);
 
-  // Function to refresh user data from Firestore
   const refreshUserData = async (firebaseUser: User) => {
     try {
-      console.log('🔄 Refreshing user data for:', firebaseUser.uid);
       const { credits: userCredits, isPremium: premium } = await checkAndResetCredits(firebaseUser.uid);
       setCredits(userCredits);
       setIsPremium(premium);
-      console.log('✅ User data refreshed - Credits:', userCredits, 'Premium:', premium);
       return { credits: userCredits, isPremium: premium };
     } catch (error) {
-      console.error('❌ Error refreshing user data:', error);
+      console.error('Error refreshing user data:', error);
       return null;
     }
   };
 
-  // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {
       setUser(firebaseUser);
       
       if (firebaseUser) {
-        // User is signed in, fetch their credits
         await refreshUserData(firebaseUser);
       } else {
-        // User is signed out
         setCredits(0);
         setIsPremium(false);
       }
@@ -92,24 +87,18 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // Check URL for returning from Stripe checkout
   useEffect(() => {
     const checkPaymentReturn = async () => {
-      // Check if we're returning from Stripe
       const urlParams = new URLSearchParams(window.location.search);
       const fromSuccess = urlParams.get('from_success');
       
       if (fromSuccess === 'true' && user) {
-        console.log('🎉 Returned from successful payment, refreshing user data...');
-        
-        // Wait a moment for Firebase to sync, then refresh
         setTimeout(async () => {
           const result = await refreshUserData(user);
           
           if (result?.isPremium) {
             alert('🎉 Welcome to Premium! You now have unlimited AI prompt generations.');
           } else {
-            // If still not premium after refresh, try one more time
             setTimeout(async () => {
               const secondResult = await refreshUserData(user);
               if (secondResult?.isPremium) {
@@ -118,7 +107,6 @@ export default function Home() {
             }, 2000);
           }
           
-          // Clean up URL
           window.history.replaceState({}, '', '/');
         }, 1000);
       }
@@ -130,14 +118,12 @@ export default function Home() {
   }, [user]);
 
   const handleGenerate = async (promptType: PromptType) => {
-    // Check if user is authenticated
     if (!user) {
       setPendingPromptType(promptType);
       setShowAuthModal(true);
       return;
     }
 
-    // Check if user has credits (unless premium)
     if (!isPremium && credits <= 0) {
       setShowPaywall(true);
       return;
@@ -146,7 +132,6 @@ export default function Home() {
     setIsGenerating(true);
 
     try {
-      // Use a credit (returns false if no credits available)
       const creditUsed = await consumeCredit(user.uid);
       
       if (!creditUsed && !isPremium) {
@@ -155,7 +140,6 @@ export default function Home() {
         return;
       }
 
-      // Generate the prompt
       const response = await fetch('/api/generate-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -170,7 +154,6 @@ export default function Home() {
       if (data.success) {
         setGeneratedPrompt(data.optimizedPrompt);
         
-        // Update local credits count
         if (!isPremium) {
           const { credits: updatedCredits } = await checkAndResetCredits(user.uid);
           setCredits(updatedCredits);
@@ -187,7 +170,6 @@ export default function Home() {
   const handleAuthSuccess = async () => {
     setShowAuthModal(false);
     
-    // If there was a pending prompt type, generate it now
     if (pendingPromptType && user) {
       await handleGenerate(pendingPromptType);
       setPendingPromptType(null);
@@ -202,17 +184,12 @@ export default function Home() {
   };
 
   const handleUpgradeSuccess = async () => {
-    console.log('💳 Payment completed, refreshing user data...');
-    
     if (user) {
-      // Refresh user data from Firestore
       const result = await refreshUserData(user);
       
       if (result?.isPremium) {
         setShowPaywall(false);
         alert('🎉 Welcome to Premium! You now have unlimited AI prompt generations.');
-      } else {
-        console.warn('⚠️ Premium status not yet updated, will refresh on page reload');
       }
     }
   };
@@ -223,7 +200,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white flex flex-col">
       <Header
         credits={credits}
         isPremium={isPremium}
@@ -242,25 +219,29 @@ export default function Home() {
         isGenerating={isGenerating}
       />
 
-      {canvasInitialized && (
-        <MindMapCanvas
-          boxes={boxes}
-          setBoxes={setBoxes}
-          selectedBox={selectedBox}
-          setSelectedBox={setSelectedBox}
-        />
-      )}
+      <div className="flex-1">
+        {canvasInitialized && (
+          <MindMapCanvas
+            boxes={boxes}
+            setBoxes={setBoxes}
+            selectedBox={selectedBox}
+            setSelectedBox={setSelectedBox}
+          />
+        )}
 
-      {generatedPrompt && <PromptGenerator prompt={generatedPrompt} />}
+        {generatedPrompt && <PromptGenerator prompt={generatedPrompt} />}
+      </div>
+
+      <Footer />
+
+      <CookieConsent />
 
       {showWelcome && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-6 md:p-8 max-w-2xl w-full border-2 border-purple-500/30 shadow-2xl shadow-purple-500/20 relative overflow-hidden max-h-[85vh] md:max-h-[80vh] flex flex-col">
-            {/* Decorative elements */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -z-10" />
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -z-10" />
             
-            {/* Close button - mobile friendly */}
             <button
               onClick={handleCloseWelcome}
               className="absolute top-4 right-4 w-10 h-10 bg-slate-700/80 hover:bg-slate-600 rounded-full flex items-center justify-center transition-colors z-10"
@@ -271,9 +252,7 @@ export default function Home() {
               </svg>
             </button>
 
-            {/* Scrollable content */}
             <div className="overflow-y-auto flex-1 pr-2 -mr-2">
-              {/* Header */}
               <div className="text-center mb-6">
                 <div className="inline-block mb-4">
                   <div className="text-5xl md:text-6xl animate-bounce">🧠</div>
@@ -286,7 +265,6 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Steps */}
               <div className="space-y-3 md:space-y-4 mb-6 md:mb-8">
                 <div className="flex items-start gap-3 md:gap-4 bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700/50">
                   <div className="flex-shrink-0 w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center font-bold text-base md:text-lg">
@@ -325,7 +303,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Features highlight */}
               <div className="bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-xl p-3 md:p-4 mb-6 border border-purple-500/20">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xl md:text-2xl">✨</span>
@@ -337,7 +314,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* CTA Button - sticky at bottom */}
             <div className="pt-4 border-t border-slate-700/50 mt-2">
               <button
                 onClick={handleCloseWelcome}
