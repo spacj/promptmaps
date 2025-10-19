@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
 import { updatePremiumStatusAdmin, adminDb } from '@/lib/firebase-admin';
 
 export async function POST(request: NextRequest) {
@@ -23,18 +23,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get Stripe instance (lazy initialization)
+    const stripe = getStripe();
+
     // Step 1: Retrieve session from Stripe FIRST
     console.log('\n📋 Step 1: Fetching session from Stripe...');
     let session;
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId);
-    } catch (stripeError: any) {
+    } catch (stripeError) {
       console.error('❌ Stripe API error:', stripeError);
+      const errorMessage = stripeError instanceof Error ? stripeError.message : 'Unknown error';
       return NextResponse.json(
         {
           success: false,
           error: 'Invalid session ID or Stripe error',
-          details: stripeError.message,
+          details: errorMessage,
         },
         { status: 400 }
       );
@@ -181,19 +185,18 @@ export async function POST(request: NextRequest) {
       userData: verifyData,
     });
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('\n❌ ===== PAYMENT VERIFICATION FAILED =====');
     console.error('Error:', error);
-    console.error('Error message:', error.message);
-    console.error('Error code:', error.code);
-    console.error('Error stack:', error.stack);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorName = error instanceof Error ? error.name : 'Error';
     
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Internal server error',
-        type: error.name,
-        code: error.code,
+        error: errorMessage,
+        type: errorName,
       },
       { status: 500 }
     );

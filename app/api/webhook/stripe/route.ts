@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
 import { updatePremiumStatusAdmin } from '@/lib/firebase-admin';
 import Stripe from 'stripe';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 export async function POST(request: NextRequest) {
+  // Get Stripe instance (lazy initialization)
+  const stripe = getStripe();
+  
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
 
@@ -22,8 +25,9 @@ export async function POST(request: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     console.log(`📨 Received webhook event: ${event.type}`);
-  } catch (error: any) {
-    console.error('❌ Webhook signature verification failed:', error.message);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ Webhook signature verification failed:', errorMessage);
     return NextResponse.json(
       { error: 'Webhook signature verification failed' },
       { status: 400 }
@@ -133,10 +137,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ received: true, type: event.type });
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error handling webhook:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Webhook handler failed: ' + error.message },
+      { error: 'Webhook handler failed: ' + errorMessage },
       { status: 500 }
     );
   }

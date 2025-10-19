@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +13,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`🛒 Creating checkout session for user: ${userId}`);
+
+    // Get Stripe instance (lazy initialization)
+    const stripe = getStripe();
 
     // Get the base URL - try multiple methods
     let baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
@@ -60,9 +63,9 @@ export async function POST(request: NextRequest) {
       mode: 'payment',
       success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/cancel`,
-      client_reference_id: userId, // THIS IS CRITICAL!
+      client_reference_id: userId,
       metadata: {
-        firebaseUid: userId, // Backup method
+        firebaseUid: userId,
       },
     });
 
@@ -74,10 +77,11 @@ export async function POST(request: NextRequest) {
       sessionId: session.id,
       url: session.url 
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error creating checkout session:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: error.message },
+      { error: errorMessage },
       { status: 500 }
     );
   }
