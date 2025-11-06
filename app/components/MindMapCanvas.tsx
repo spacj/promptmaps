@@ -1,12 +1,22 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
-import { MindMapNode } from '@/types';
+import { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+
+// Types
+interface MindMapNode {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  level: number;
+  parentId: string | null;
+  style: { bg: string; text: string };
+}
 
 interface MindMapCanvasProps {
   boxes: MindMapNode[];
-  setBoxes: (boxes: MindMapNode[]) => void;
+  setBoxes: (boxes: MindMapNode[] | ((prev: MindMapNode[]) => MindMapNode[])) => void;
   selectedBox: string | null;
   setSelectedBox: (id: string | null) => void;
 }
@@ -16,62 +26,108 @@ interface MindMapNodeProps {
   isSelected: boolean;
   onMouseDown: (e: React.MouseEvent, box: MindMapNode) => void;
   onTouchStart: (e: React.TouchEvent, box: MindMapNode) => void;
-  onTextChange: (text: string) => void;
+  onTextChange: (id: string, text: string) => void;
   isMobile: boolean;
-  scale: number;
 }
 
-function MindMapNodeComponent({
+// Ultra-optimized Node Component with aggressive memoization
+const MindMapNodeComponent = memo(({
   box,
   isSelected,
   onMouseDown,
   onTouchStart,
   onTextChange,
   isMobile,
-  scale,
-}: MindMapNodeProps) {
+}: MindMapNodeProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastTapRef = useRef<number>(0);
+  const hasAutoFocusedRef = useRef(false);
 
+  // Auto-focus new nodes only once - with cleanup flag
   useEffect(() => {
-    // Auto-focus and edit new nodes (those with placeholder text) - but only on desktop
-    if (isSelected && !isEditing && !isMobile && (box.text === 'Sibling' || box.text === 'Child' || box.text === 'Root Idea')) {
+    if (isSelected && !isEditing && !isMobile && !hasAutoFocusedRef.current &&
+        (box.text === 'Sibling' || box.text === 'Child' || box.text === 'Root Idea')) {
+      hasAutoFocusedRef.current = true;
       setIsEditing(true);
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 0);
+      // Use double RAF for more reliable focus
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        });
+      });
     }
-  }, [isSelected, box.text, isEditing, isMobile]);
+    
+    // Reset flag when box changes
+    if (!isSelected) {
+      hasAutoFocusedRef.current = false;
+    }
+  }, [isSelected, box.text, box.id, isEditing, isMobile]);
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    // On mobile, require double-tap to edit; on desktop, second click enables editing
+    e.preventDefault();
     if (isSelected && !isEditing && !isMobile) {
-      // Desktop: Second click - enable editing
       setIsEditing(true);
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 0);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        });
+      });
     }
-  };
+  }, [isSelected, isEditing, isMobile]);
 
-  const handleDoubleClick = (e: React.MouseEvent | React.TouchEvent) => {
-    e.stopPropagation();
-    // Double-click/tap to edit
-    if (isSelected && !isEditing) {
-      setIsEditing(true);
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 0);
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapRef.current;
+    
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+      e.stopPropagation();
+      e.preventDefault();
+      // Double tap detected
+      if (isSelected && !isEditing) {
+        setIsEditing(true);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+          });
+        });
+      }
     }
-  };
+    lastTapRef.current = now;
+  }, [isSelected, isEditing]);
 
-  const handleBlur = () => {
+  const handleBlur = useCallback(() => {
     setIsEditing(false);
-  };
+  }, []);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    onTextChange(box.id, e.target.value);
+  }, [box.id, onTextChange]);
+
+  const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+  }, []);
+
+  // Prevent drag start when editing
+  const handleMouseDownNode = useCallback((e: React.MouseEvent) => {
+    if (isEditing) {
+      e.stopPropagation();
+      return;
+    }
+    onMouseDown(e, box);
+  }, [isEditing, onMouseDown, box]);
+
+  const handleTouchStartNode = useCallback((e: React.TouchEvent) => {
+    if (isEditing) {
+      e.stopPropagation();
+      return;
+    }
+    onTouchStart(e, box);
+  }, [isEditing, onTouchStart, box]);
 
   return (
     <div
@@ -79,34 +135,36 @@ function MindMapNodeComponent({
         isSelected ? 'ring-4 ring-yellow-400 z-10' : 'hover:shadow-2xl'
       }`}
       style={{ 
-        left: box.x, 
-        top: box.y, 
+        left: `${box.x}px`, 
+        top: `${box.y}px`, 
         width: isMobile ? '130px' : '160px', 
         padding: isMobile ? '12px' : '14px',
         touchAction: 'none',
-        transformOrigin: 'top left'
+        willChange: 'transform',
+        transform: 'translate3d(0,0,0)', // Force GPU acceleration
       }}
-      onMouseDown={(e) => onMouseDown(e, box)}
-      onTouchStart={(e) => onTouchStart(e, box)}
+      onMouseDown={handleMouseDownNode}
+      onTouchStart={handleTouchStartNode}
+      onTouchEnd={handleTouchEnd}
       onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
     >
       <input
         ref={inputRef}
         type="text"
         value={box.text}
-        onChange={(e) => onTextChange(e.target.value)}
-        onFocus={(e) => {
-          e.target.select();
-        }}
+        onChange={handleChange}
+        onFocus={handleFocus}
         onBlur={handleBlur}
+        onMouseDown={(e) => isEditing && e.stopPropagation()}
+        onTouchStart={(e) => isEditing && e.stopPropagation()}
         className="w-full bg-transparent border-none outline-none text-sm font-semibold placeholder-white/50"
         placeholder="Enter text..."
         readOnly={!isEditing}
         style={{ 
           fontSize: isMobile ? '13px' : '14px',
           cursor: isEditing ? 'text' : 'inherit',
-          pointerEvents: isEditing ? 'auto' : 'none'
+          pointerEvents: isEditing ? 'auto' : 'none',
+          userSelect: isEditing ? 'text' : 'none',
         }}
       />
       {isSelected && !isEditing && (
@@ -114,7 +172,80 @@ function MindMapNodeComponent({
       )}
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Ultra-aggressive comparison - only re-render when truly necessary
+  return (
+    prevProps.box.id === nextProps.box.id &&
+    prevProps.box.text === nextProps.box.text &&
+    prevProps.box.x === nextProps.box.x &&
+    prevProps.box.y === nextProps.box.y &&
+    prevProps.box.style.bg === nextProps.box.style.bg &&
+    prevProps.box.style.text === nextProps.box.style.text &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isMobile === nextProps.isMobile
+  );
+});
+
+MindMapNodeComponent.displayName = 'MindMapNodeComponent';
+
+// Memoized SVG connections component
+const SVGConnections = memo(({ boxes, isMobile }: { boxes: MindMapNode[], isMobile: boolean }) => {
+  const nodeWidth = isMobile ? 130 : 160;
+  const nodeHeight = 40;
+
+  return (
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style={{ stopColor: '#94a3b8', stopOpacity: 0.8 }} />
+          <stop offset="100%" style={{ stopColor: '#64748b', stopOpacity: 0.6 }} />
+        </linearGradient>
+      </defs>
+      {boxes.map(box => {
+        if (!box.parentId) return null;
+        const parent = boxes.find(b => b.id === box.parentId);
+        if (!parent) return null;
+
+        return (
+          <g key={`line-${box.id}`}>
+            <line
+              x1={parent.x + nodeWidth / 2}
+              y1={parent.y + nodeHeight / 2}
+              x2={box.x + nodeWidth / 2}
+              y2={box.y + nodeHeight / 2}
+              stroke="url(#lineGradient)"
+              strokeWidth={isMobile ? "2" : "3"}
+              strokeLinecap="round"
+              opacity="0.6"
+            />
+            <circle
+              cx={box.x + nodeWidth / 2}
+              cy={box.y + nodeHeight / 2}
+              r="4"
+              fill="#94a3b8"
+              opacity="0.8"
+            />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}, (prevProps, nextProps) => {
+  // Only re-render if positions or parent relationships changed
+  if (prevProps.boxes.length !== nextProps.boxes.length) return false;
+  if (prevProps.isMobile !== nextProps.isMobile) return false;
+  
+  for (let i = 0; i < prevProps.boxes.length; i++) {
+    const prev = prevProps.boxes[i];
+    const next = nextProps.boxes[i];
+    if (prev.x !== next.x || prev.y !== next.y || prev.parentId !== next.parentId) {
+      return false;
+    }
+  }
+  return true;
+});
+
+SVGConnections.displayName = 'SVGConnections';
 
 export default function MindMapCanvas({
   boxes,
@@ -130,10 +261,14 @@ export default function MindMapCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [lastTouchDistance, setLastTouchDistance] = useState(0);
+  
   const canvasRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const isDraggingNodeRef = useRef(false);
+  const lastMousePosRef = useRef({ x: 0, y: 0 });
+  const draggedBoxRef = useRef<string | null>(null);
 
-  // Virtual canvas size (larger than viewport)
   const CANVAS_WIDTH = 3000;
   const CANVAS_HEIGHT = 2000;
 
@@ -143,114 +278,176 @@ export default function MindMapCanvas({
     };
     
     checkMobile();
-    window.addEventListener('resize', checkMobile);
+    const debouncedResize = debounce(checkMobile, 150);
+    window.addEventListener('resize', debouncedResize);
     
     return () => {
-      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('resize', debouncedResize);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
     };
   }, []);
 
-  const getTouchDistance = (touches: React.TouchList) => {
+  // Debounce helper
+  const debounce = (func: Function, wait: number) => {
+    let timeout: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func(...args), wait);
+    };
+  };
+
+  const getTouchDistance = useCallback((touches: React.TouchList) => {
     if (touches.length < 2) return 0;
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.sqrt(dx * dx + dy * dy);
-  };
+  }, []);
 
-  const getTouchCenter = (touches: React.TouchList) => {
+  const getTouchCenter = useCallback((touches: React.TouchList) => {
     if (touches.length === 0) return { x: 0, y: 0 };
     if (touches.length === 1) return { x: touches[0].clientX, y: touches[0].clientY };
     return {
       x: (touches[0].clientX + touches[1].clientX) / 2,
       y: (touches[0].clientY + touches[1].clientY) / 2,
     };
-  };
+  }, []);
 
-  const handleMouseDown = (e: React.MouseEvent, box: MindMapNode) => {
-    if (e.button === 2) return; // Ignore right click
+  // Batch update helper for better performance
+  const updateBoxPositionBatched = useCallback((boxId: string, x: number, y: number) => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      setBoxes((prevBoxes: MindMapNode[]) => prevBoxes.map((b: MindMapNode) => (b.id === boxId ? { ...b, x, y } : b)));
+    });
+  }, [setBoxes]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent, box: MindMapNode) => {
+    if (e.button !== 0) return; // Only left click
     e.stopPropagation();
+    e.preventDefault();
+    
     setSelectedBox(box.id);
     setDragging(box.id);
-    setDragOffset({
-      x: (e.clientX - panOffset.x) / scale - box.x,
-      y: (e.clientY - panOffset.y) / scale - box.y,
-    });
-  };
+    isDraggingNodeRef.current = true;
+    draggedBoxRef.current = box.id;
+    
+    const offsetX = (e.clientX - panOffset.x) / scale - box.x;
+    const offsetY = (e.clientY - panOffset.y) / scale - box.y;
+    setDragOffset({ x: offsetX, y: offsetY });
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+  }, [panOffset, scale, setSelectedBox]);
 
-  const handleTouchStart = (e: React.TouchEvent, box: MindMapNode) => {
+  const handleTouchStart = useCallback((e: React.TouchEvent, box: MindMapNode) => {
+    if (e.touches.length !== 1) return;
+    
+    const touch = e.touches[0];
+    setSelectedBox(box.id);
+    setDragging(box.id);
+    isDraggingNodeRef.current = true;
+    draggedBoxRef.current = box.id;
+    
+    const offsetX = (touch.clientX - panOffset.x) / scale - box.x;
+    const offsetY = (touch.clientY - panOffset.y) / scale - box.y;
+    setDragOffset({ x: offsetX, y: offsetY });
+    lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+  }, [panOffset, scale, setSelectedBox]);
+
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0 || isDraggingNodeRef.current) return;
+    
+    e.preventDefault();
+    setIsPanning(true);
+    setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+    setSelectedBox(null);
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+  }, [panOffset, setSelectedBox]);
+
+  const handleCanvasTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isDraggingNodeRef.current) return;
+    
     if (e.touches.length === 1) {
-      e.stopPropagation();
-      const touch = e.touches[0];
-      setSelectedBox(box.id);
-      setDragging(box.id);
-      setDragOffset({
-        x: (touch.clientX - panOffset.x) / scale - box.x,
-        y: (touch.clientY - panOffset.y) / scale - box.y,
-      });
-    }
-  };
-
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 0 && !dragging) { // Left click and not dragging a node
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
-      setSelectedBox(null);
-    }
-  };
-
-  const handleCanvasTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1 && !dragging) {
-      // Single touch - start panning
       const touch = e.touches[0];
       setIsPanning(true);
       setPanStart({ x: touch.clientX - panOffset.x, y: touch.clientY - panOffset.y });
+      lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
     } else if (e.touches.length === 2) {
-      // Two fingers - start pinch zoom
+      e.preventDefault();
       const distance = getTouchDistance(e.touches);
       setLastTouchDistance(distance);
       setIsPanning(false);
       setDragging(null);
+      isDraggingNodeRef.current = false;
     }
-  };
+  }, [panOffset, getTouchDistance]);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (dragging && canvasRef.current) {
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // Check if mouse actually moved (avoid unnecessary updates)
+    const moved = Math.abs(e.clientX - lastMousePosRef.current.x) > 0 || 
+                  Math.abs(e.clientY - lastMousePosRef.current.y) > 0;
+    
+    if (!moved) return;
+    
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+
+    if (dragging && isDraggingNodeRef.current) {
       const newX = (e.clientX - panOffset.x) / scale - dragOffset.x;
       const newY = (e.clientY - panOffset.y) / scale - dragOffset.y;
-      setBoxes(
-        boxes.map(b => (b.id === dragging ? { ...b, x: newX, y: newY } : b))
-      );
-    } else if (isPanning) {
-      setPanOffset({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
+      updateBoxPositionBatched(dragging, newX, newY);
+    } else if (isPanning && !isDraggingNodeRef.current) {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(() => {
+        setPanOffset({
+          x: e.clientX - panStart.x,
+          y: e.clientY - panStart.y,
+        });
       });
     }
-  };
+  }, [dragging, isPanning, panOffset, scale, dragOffset, panStart, updateBoxPositionBatched]);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 1) {
-      if (dragging && canvasRef.current) {
+      const touch = e.touches[0];
+      
+      // Check if touch actually moved
+      const moved = Math.abs(touch.clientX - lastMousePosRef.current.x) > 1 || 
+                    Math.abs(touch.clientY - lastMousePosRef.current.y) > 1;
+      
+      if (!moved) return;
+      
+      lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+
+      if (dragging && isDraggingNodeRef.current) {
         e.preventDefault();
-        const touch = e.touches[0];
         const newX = (touch.clientX - panOffset.x) / scale - dragOffset.x;
         const newY = (touch.clientY - panOffset.y) / scale - dragOffset.y;
-        setBoxes(
-          boxes.map(b => (b.id === dragging ? { ...b, x: newX, y: newY } : b))
-        );
-      } else if (isPanning) {
+        updateBoxPositionBatched(dragging, newX, newY);
+      } else if (isPanning && !isDraggingNodeRef.current) {
         e.preventDefault();
-        const touch = e.touches[0];
-        setPanOffset({
-          x: touch.clientX - panStart.x,
-          y: touch.clientY - panStart.y,
+        if (animationFrameRef.current !== null) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        
+        animationFrameRef.current = requestAnimationFrame(() => {
+          setPanOffset({
+            x: touch.clientX - panStart.x,
+            y: touch.clientY - panStart.y,
+          });
         });
       }
     } else if (e.touches.length === 2) {
       e.preventDefault();
-      // Pinch zoom
       const distance = getTouchDistance(e.touches);
-      if (lastTouchDistance > 0) {
+      
+      if (lastTouchDistance > 0 && Math.abs(distance - lastTouchDistance) > 1) {
         const delta = distance / lastTouchDistance;
         const center = getTouchCenter(e.touches);
         
@@ -259,36 +456,57 @@ export default function MindMapCanvas({
           const x = center.x - rect.left;
           const y = center.y - rect.top;
           
-          const newScale = Math.min(Math.max(scale * delta, 0.3), 3);
-          const scaleChange = newScale / scale;
+          if (animationFrameRef.current !== null) {
+            cancelAnimationFrame(animationFrameRef.current);
+          }
           
-          setPanOffset({
-            x: x - (x - panOffset.x) * scaleChange,
-            y: y - (y - panOffset.y) * scaleChange,
+          animationFrameRef.current = requestAnimationFrame(() => {
+            const newScale = Math.min(Math.max(scale * delta, 0.3), 3);
+            const scaleChange = newScale / scale;
+            
+            setPanOffset(prev => ({
+              x: x - (x - prev.x) * scaleChange,
+              y: y - (y - prev.y) * scaleChange,
+            }));
+            setScale(newScale);
           });
-          setScale(newScale);
         }
       }
       setLastTouchDistance(distance);
     }
-  };
+  }, [dragging, isPanning, panOffset, scale, dragOffset, panStart, lastTouchDistance, getTouchDistance, getTouchCenter, updateBoxPositionBatched]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
     setDragging(null);
     setIsPanning(false);
-  };
+    isDraggingNodeRef.current = false;
+    draggedBoxRef.current = null;
+    
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  }, []);
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 0) {
       setDragging(null);
       setIsPanning(false);
+      isDraggingNodeRef.current = false;
+      draggedBoxRef.current = null;
       setLastTouchDistance(0);
+      
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
     } else if (e.touches.length === 1) {
       setLastTouchDistance(0);
     }
-  };
+  }, []);
 
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     
     if (containerRef.current) {
@@ -296,85 +514,66 @@ export default function MindMapCanvas({
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      // Smoother zoom with smaller delta
+      const delta = e.deltaY > 0 ? 0.95 : 1.05;
       const newScale = Math.min(Math.max(scale * delta, 0.3), 3);
       const scaleChange = newScale / scale;
       
-      setPanOffset({
-        x: x - (x - panOffset.x) * scaleChange,
-        y: y - (y - panOffset.y) * scaleChange,
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(() => {
+        setPanOffset(prev => ({
+          x: x - (x - prev.x) * scaleChange,
+          y: y - (y - prev.y) * scaleChange,
+        }));
+        setScale(newScale);
       });
-      setScale(newScale);
     }
-  };
+  }, [scale]);
 
-  const zoomIn = () => {
+  const zoomIn = useCallback(() => {
     const newScale = Math.min(scale * 1.2, 3);
     const scaleChange = newScale / scale;
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
-      setPanOffset({
-        x: centerX - (centerX - panOffset.x) * scaleChange,
-        y: centerY - (centerY - panOffset.y) * scaleChange,
-      });
+      setPanOffset(prev => ({
+        x: centerX - (centerX - prev.x) * scaleChange,
+        y: centerY - (centerY - prev.y) * scaleChange,
+      }));
     }
     setScale(newScale);
-  };
+  }, [scale]);
 
-  const zoomOut = () => {
+  const zoomOut = useCallback(() => {
     const newScale = Math.max(scale * 0.8, 0.3);
     const scaleChange = newScale / scale;
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
-      setPanOffset({
-        x: centerX - (centerX - panOffset.x) * scaleChange,
-        y: centerY - (centerY - panOffset.y) * scaleChange,
-      });
+      setPanOffset(prev => ({
+        x: centerX - (centerX - prev.x) * scaleChange,
+        y: centerY - (centerY - prev.y) * scaleChange,
+      }));
     }
     setScale(newScale);
-  };
+  }, [scale]);
 
-  const resetView = () => {
+  const resetView = useCallback(() => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
     setScale(1);
     setPanOffset({ x: 0, y: 0 });
-  };
+  }, []);
 
-  const drawConnections = () => {
-    return boxes.map(box => {
-      if (!box.parentId) return null;
-      const parent = boxes.find(b => b.id === box.parentId);
-      if (!parent) return null;
-
-      const nodeWidth = isMobile ? 130 : 160;
-      const nodeHeight = 40;
-
-      return (
-        <g key={`line-${box.id}`}>
-          <line
-            x1={parent.x + nodeWidth / 2}
-            y1={parent.y + nodeHeight / 2}
-            x2={box.x + nodeWidth / 2}
-            y2={box.y + nodeHeight / 2}
-            stroke="url(#lineGradient)"
-            strokeWidth={isMobile ? "2" : "3"}
-            strokeLinecap="round"
-            opacity="0.6"
-          />
-          <circle
-            cx={box.x + nodeWidth / 2}
-            cy={box.y + nodeHeight / 2}
-            r="4"
-            fill="#94a3b8"
-            opacity="0.8"
-          />
-        </g>
-      );
-    });
-  };
+  const handleTextChange = useCallback((id: string, text: string) => {
+    setBoxes((prevBoxes: MindMapNode[]) => prevBoxes.map((b: MindMapNode) => (b.id === id ? { ...b, text } : b)));
+  }, [setBoxes]);
 
   return (
     <div className={`${isMobile ? 'p-3' : 'p-6'} max-w-7xl mx-auto`}>
@@ -384,7 +583,7 @@ export default function MindMapCanvas({
         style={{ 
           height: isMobile ? '500px' : '650px',
           touchAction: 'none',
-          cursor: isPanning ? 'grabbing' : dragging ? 'grabbing' : 'grab'
+          cursor: isPanning ? 'grabbing' : dragging ? 'grabbing' : 'grab',
         }}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleMouseMove}
@@ -395,13 +594,13 @@ export default function MindMapCanvas({
         onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
       >
-        {/* Zoom controls - Desktop only */}
         {!isMobile && (
           <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
             <button
               onClick={zoomIn}
               className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
               title="Zoom in"
+              type="button"
             >
               <ZoomIn size={20} />
             </button>
@@ -409,6 +608,7 @@ export default function MindMapCanvas({
               onClick={zoomOut}
               className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
               title="Zoom out"
+              type="button"
             >
               <ZoomOut size={20} />
             </button>
@@ -416,6 +616,7 @@ export default function MindMapCanvas({
               onClick={resetView}
               className="bg-slate-800/90 hover:bg-slate-700 p-2 rounded-lg border border-slate-600 transition-colors backdrop-blur-sm"
               title="Reset view"
+              type="button"
             >
               <Maximize2 size={20} />
             </button>
@@ -425,14 +626,15 @@ export default function MindMapCanvas({
           </div>
         )}
 
-        {/* Grid pattern background */}
         <div 
-          className="absolute opacity-10"
+          className="absolute opacity-10 pointer-events-none"
           style={{
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
             transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${scale})`,
             transformOrigin: '0 0',
+            willChange: 'transform',
+            backfaceVisibility: 'hidden',
           }}
         >
           <div className="absolute inset-0" style={{
@@ -444,7 +646,6 @@ export default function MindMapCanvas({
           }} />
         </div>
 
-        {/* Canvas content */}
         <div
           ref={canvasRef}
           className="absolute"
@@ -453,17 +654,11 @@ export default function MindMapCanvas({
             height: CANVAS_HEIGHT,
             transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${scale})`,
             transformOrigin: '0 0',
+            willChange: 'transform',
+            backfaceVisibility: 'hidden',
           }}
         >
-          <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            <defs>
-              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style={{ stopColor: '#94a3b8', stopOpacity: 0.8 }} />
-                <stop offset="100%" style={{ stopColor: '#64748b', stopOpacity: 0.6 }} />
-              </linearGradient>
-            </defs>
-            {drawConnections()}
-          </svg>
+          <SVGConnections boxes={boxes} isMobile={isMobile} />
 
           {boxes.map(box => (
             <MindMapNodeComponent
@@ -472,17 +667,13 @@ export default function MindMapCanvas({
               isSelected={selectedBox === box.id}
               onMouseDown={handleMouseDown}
               onTouchStart={handleTouchStart}
-              onTextChange={(text) => {
-                setBoxes(boxes.map(b => (b.id === box.id ? { ...b, text } : b)));
-              }}
+              onTextChange={handleTextChange}
               isMobile={isMobile}
-              scale={scale}
             />
           ))}
         </div>
       </div>
 
-      {/* Instructions */}
       <div className="mt-3 text-center text-xs text-slate-400">
         {isMobile ? (
           <>Pinch to zoom • Drag with one finger to pan • Drag nodes to move</>
