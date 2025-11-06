@@ -290,10 +290,10 @@ export default function MindMapCanvas({
   }, []);
 
   // Debounce helper
-  const debounce = (func: Function, wait: number) => {
-    let timeout: NodeJS.Timeout;
-    return (...args: any[]) => {
-      clearTimeout(timeout);
+  const debounce = <T extends (...args: any[]) => any>(func: T, wait: number) => {
+    let timeout: NodeJS.Timeout | undefined;
+    return (...args: Parameters<T>) => {
+      if (timeout) clearTimeout(timeout);
       timeout = setTimeout(() => func(...args), wait);
     };
   };
